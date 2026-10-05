@@ -1,0 +1,880 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Sanad — Dubai Clinical Capacity Intelligence</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --nav:#1C2B38;--green:#00594C;--teal:#007A68;
+  --crit:#B8382A;--emer:#A8720A;--ok:#1A6E46;
+  --crit-bg:#FDF0EE;--emer-bg:#FDF4E4;--ok-bg:#ECF5EF;
+  --bg:#F1F3F5;--white:#fff;--text:#0F1923;--mid:#374151;--muted:#6B7280;
+  --border:#D0D5DB;--subtle:#E8EAED;
+}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:var(--bg);color:var(--text);height:100vh;overflow:hidden;display:flex;flex-direction:column;font-size:13px}
+
+/* NAV */
+.nav{background:var(--nav);height:46px;display:flex;align-items:center;padding:0 16px;gap:14px;flex-shrink:0}
+.logo{font-size:18px;font-weight:800;color:#fff;letter-spacing:-.4px;white-space:nowrap}
+.logo span{color:#5DD6C0}
+.ndiv{width:1px;height:22px;background:rgba(255,255,255,.12);flex-shrink:0}
+.nsub{font-size:11px;color:rgba(255,255,255,.4);line-height:1.3;flex-shrink:0}
+.nlinks{display:flex;gap:2px;margin-left:6px}
+.na{font-size:12px;color:rgba(255,255,255,.5);padding:5px 9px;border-radius:3px;cursor:pointer;transition:all .12s;white-space:nowrap}
+.na:hover,.na.on{color:#fff;background:rgba(255,255,255,.1)}
+.nbadge{margin-left:auto;border:1px solid rgba(93,214,192,.3);color:rgba(93,214,192,.8);font-size:10px;font-weight:700;padding:3px 10px;border-radius:3px;letter-spacing:.4px;white-space:nowrap}
+
+/* STATS BAR */
+.stats{background:var(--white);border-bottom:2px solid var(--border);display:flex;align-items:stretch;height:56px;flex-shrink:0}
+.stat{display:flex;flex-direction:column;justify-content:center;padding:0 20px 0 16px;border-right:1px solid var(--subtle);min-width:0}
+.stat:last-child{border-right:none}
+.slbl{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:var(--muted);margin-bottom:3px}
+.sval{font-size:20px;font-weight:800;font-variant-numeric:tabular-nums;line-height:1}
+.sval.c{color:var(--crit)}.sval.e{color:var(--emer)}.sval.t{color:var(--teal)}
+.snote{font-size:10px;color:var(--muted);margin-top:2px}
+.stat-scope{margin-left:auto;padding:0 16px;font-size:10px;color:var(--muted);line-height:1.5;flex-shrink:0;display:flex;align-items:center;text-align:right;border-left:1px solid var(--subtle)}
+
+/* MAIN */
+.main{display:grid;grid-template-columns:238px 1fr 342px;flex:1;min-height:0;overflow:hidden}
+
+/* SIDEBAR */
+.sb{background:var(--white);border-right:1px solid var(--border);display:flex;flex-direction:column;overflow:hidden}
+.sb-hd{padding:10px 12px 8px;border-bottom:1px solid var(--subtle);flex-shrink:0}
+.sb-title{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:var(--muted);margin-bottom:7px}
+.frow{display:flex;gap:4px;flex-wrap:wrap}
+.fb{font-size:10px;font-weight:600;padding:3px 8px;border:1px solid var(--border);border-radius:3px;cursor:pointer;background:var(--white);color:var(--muted);transition:all .12s;letter-spacing:.2px}
+.fb.on{background:var(--nav);color:#fff;border-color:var(--nav)}
+.sb-list{flex:1;overflow-y:auto}
+.dr{display:flex;align-items:center;padding:8px 10px;cursor:pointer;border-bottom:1px solid var(--subtle);gap:8px;transition:background .1s;border-left:3px solid transparent}
+.dr:hover{background:#F5F7F8}
+.dr.sel{background:#EAF4F1;border-left-color:var(--teal)}
+.dsev{width:3px;height:30px;border-radius:1px;flex-shrink:0}
+.dsev.c{background:var(--crit)}.dsev.e{background:#D8A520}.dsev.ok{background:var(--ok)}
+.di{flex:1;min-width:0}
+.dname{font-size:12px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.dmeta{font-size:10px;color:var(--muted);margin-top:1px}
+.dgap{font-size:12px;font-weight:700;font-variant-numeric:tabular-nums;flex-shrink:0}
+.dgap.c{color:var(--crit)}.dgap.e{color:var(--emer)}.dgap.ok{color:var(--ok)}
+
+/* MAP */
+.mapw{position:relative;overflow:hidden}
+#map{width:100%;height:100%}
+.mleg{position:absolute;bottom:18px;left:10px;z-index:500;background:rgba(255,255,255,.96);border:1px solid var(--border);border-radius:4px;padding:8px 11px;font-size:11px}
+.mleg-t{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);margin-bottom:6px}
+.mleg-r{display:flex;align-items:center;gap:7px;margin-bottom:3px}
+.mleg-d{width:11px;height:11px;border-radius:50%}
+.mleg-note{font-size:9px;color:var(--muted);margin-top:5px}
+
+/* RIGHT PANEL */
+.rp{background:var(--white);border-left:1px solid var(--border);display:flex;flex-direction:column;overflow:hidden}
+.rp-hd{padding:10px 13px 9px;border-bottom:1px solid var(--border);flex-shrink:0}
+.rp-dn{font-size:15px;font-weight:800;display:flex;align-items:center;gap:8px;margin-bottom:2px}
+.rp-meta{font-size:11px;color:var(--muted)}
+.stag{font-size:9px;font-weight:800;padding:2px 7px;border-radius:3px;letter-spacing:.4px;text-transform:uppercase;flex-shrink:0}
+.stag.c{background:var(--crit-bg);color:var(--crit)}
+.stag.e{background:var(--emer-bg);color:var(--emer)}
+.stag.ok{background:var(--ok-bg);color:var(--ok)}
+
+/* TABS */
+.tabs{display:flex;border-bottom:1px solid var(--border);flex-shrink:0}
+.tab{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;padding:9px 0;cursor:pointer;color:var(--muted);border-bottom:2px solid transparent;transition:all .12s;flex:1;text-align:center}
+.tab.on{color:var(--teal);border-bottom-color:var(--teal)}
+.tab:hover:not(.on){color:var(--mid);background:var(--bg)}
+.tb{flex:1;overflow-y:auto}
+.pane{display:none}.pane.on{display:block}
+
+/* GAP TABLE */
+.gw{padding:12px 13px}
+.sec{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:var(--muted);margin-bottom:8px}
+table.gt{width:100%;border-collapse:collapse;font-size:11px}
+table.gt th{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--muted);padding:5px 6px;border-bottom:2px solid var(--border);text-align:right;background:var(--bg)}
+table.gt th:first-child{text-align:left}
+table.gt td{padding:7px 6px;border-bottom:1px solid var(--subtle);font-variant-numeric:tabular-nums;text-align:right;color:var(--mid)}
+table.gt td:first-child{text-align:left;font-weight:600;color:var(--text)}
+table.gt tr:hover td{background:#FAFBFB}
+.neg{color:var(--crit)!important;font-weight:700}
+.pos{color:var(--ok)!important;font-weight:700}
+.pctw{display:flex;align-items:center;gap:4px;justify-content:flex-end}
+.pct-tr{width:40px;height:3px;background:var(--subtle);border-radius:2px;overflow:hidden}
+.pct-fi{height:100%;border-radius:2px}
+.tags-row{display:flex;flex-wrap:wrap;gap:5px;margin-top:10px;padding-top:10px;border-top:1px solid var(--subtle)}
+.gt-tag{font-size:10px;font-weight:600;padding:2px 8px;background:var(--crit-bg);color:var(--crit);border-radius:3px;border:1px solid rgba(184,56,42,.12)}
+.tags-lbl{font-size:9px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.4px;width:100%;margin-bottom:2px}
+
+/* FORECAST */
+.fw{padding:12px 13px}
+.ch{position:relative;height:190px;margin-bottom:10px}
+.cl{display:flex;gap:14px;font-size:10px;color:var(--muted);margin-bottom:8px}
+.cl-i{display:flex;align-items:center;gap:5px}
+.cl-ln{width:18px;height:2px;border-radius:1px}
+.fn{font-size:10px;color:var(--muted);line-height:1.55;padding-top:8px;border-top:1px solid var(--subtle)}
+
+/* PLANNING BRIEF */
+.bw{padding:12px 13px}
+.bh{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:var(--muted);padding-bottom:6px;border-bottom:1px solid var(--border);margin-bottom:10px}
+.bgrid{display:grid;grid-template-columns:1fr 1fr;gap:5px 12px;margin-bottom:12px;padding-bottom:12px;border-bottom:1px solid var(--subtle)}
+.bgi{display:flex;flex-direction:column;gap:1px}
+.bgi-l{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--muted)}
+.bgi-v{font-size:12px;font-weight:600;color:var(--text)}
+.bbody{font-size:12px;line-height:1.65;color:var(--mid);margin-bottom:12px;padding-bottom:12px;border-bottom:1px solid var(--subtle)}
+.recs-t{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:var(--muted);margin-bottom:8px}
+.rec{display:grid;grid-template-columns:18px 1fr;gap:0 8px;margin-bottom:10px;padding-bottom:10px;border-bottom:1px solid var(--subtle)}
+.rec:last-child{border-bottom:none;margin-bottom:0;padding-bottom:0}
+.rn{font-size:12px;font-weight:800;color:var(--teal);padding-top:1px}
+.rt{font-size:12px;font-weight:700;color:var(--text);margin-bottom:2px}
+.rd{font-size:11px;color:var(--muted);line-height:1.5}
+
+/* SUBMIT */
+.sw{padding:12px 13px}
+.snote-top{font-size:10px;color:var(--mid);background:var(--bg);border:1px solid var(--border);border-radius:3px;padding:7px 10px;margin-bottom:12px;line-height:1.5}
+.fsec{margin-bottom:14px}
+.fsec-t{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);margin-bottom:7px;padding-bottom:5px;border-bottom:1px solid var(--subtle)}
+.fr{margin-bottom:7px}
+.fr label{display:block;font-size:10px;font-weight:600;color:var(--mid);margin-bottom:3px;text-transform:uppercase;letter-spacing:.3px}
+.fr input,.fr select{width:100%;padding:6px 8px;border:1px solid var(--border);border-radius:3px;font-size:12px;color:var(--text);background:var(--white)}
+.fr input:focus,.fr select:focus{outline:none;border-color:var(--teal)}
+.fgrid{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.sbtn{width:100%;background:var(--green);color:#fff;border:none;padding:9px;border-radius:3px;font-size:12px;font-weight:700;cursor:pointer;letter-spacing:.3px;margin-top:4px}
+.sbtn:hover{background:#004A3E}
+.sub-fn{font-size:10px;color:var(--muted);text-align:center;margin-top:5px}
+.spgrid{display:grid;grid-template-columns:1fr 1fr;gap:4px 10px}
+.spitem{display:flex;align-items:center;gap:5px;font-size:11px;cursor:pointer}
+.spitem input{width:12px;height:12px;cursor:pointer;accent-color:var(--teal)}
+
+/* EMPTY */
+.empty{display:flex;flex-direction:column;align-items:center;justify-content:center;padding:40px 16px;color:var(--muted);font-size:12px;gap:5px;text-align:center}
+.ei{font-size:20px;opacity:.5;margin-bottom:4px}
+
+/* TOAST */
+.toast{position:fixed;bottom:14px;right:14px;background:var(--nav);color:#fff;padding:9px 15px;border-radius:3px;font-size:12px;font-weight:600;z-index:9999;opacity:0;transform:translateY(10px);transition:all .25s;pointer-events:none;border-left:3px solid var(--teal)}
+.toast.show{opacity:1;transform:translateY(0)}
+
+/* LEAFLET */
+.leaflet-popup-content-wrapper{border-radius:4px!important;box-shadow:0 3px 12px rgba(0,0,0,.14)!important;padding:0!important}
+.leaflet-popup-content{margin:0!important}
+.pop{padding:10px 13px;min-width:165px}
+.pop-n{font-size:13px;font-weight:800;margin-bottom:5px}
+.pop-r{display:flex;justify-content:space-between;font-size:11px;margin-bottom:2px;color:#555}
+.pop-f{font-size:10px;color:#999;margin-top:6px;padding-top:6px;border-top:1px solid #eee}
+
+.na{font-size:11px;padding:5px 7px}
+::-webkit-scrollbar{width:4px}
+::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px}
+
+/* MODULE VIEWS */
+.mod-view{flex:1;min-height:0;overflow-y:auto;background:var(--bg)}
+.mv{max-width:1180px;margin:0 auto;padding:20px 22px}
+.mv-hd{margin-bottom:14px;padding-bottom:11px;border-bottom:2px solid var(--border)}
+.mv-title{font-size:17px;font-weight:800;letter-spacing:-.3px}
+.mv-sub{font-size:10px;color:var(--muted);margin-top:3px}
+.mv-sec{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:var(--muted);margin-bottom:10px;padding-bottom:6px;border-bottom:1px solid var(--border)}
+.mv-metrics{display:flex;border:1px solid var(--border);border-radius:3px;background:#fff;margin-bottom:14px;overflow:hidden}
+.mv-met{flex:1;padding:11px 15px;border-right:1px solid var(--subtle)}
+.mv-met:last-child{border-right:none}
+.mv-met-l{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);margin-bottom:3px}
+.mv-met-v{font-size:19px;font-weight:800;font-variant-numeric:tabular-nums;line-height:1}
+.mv-met-n{font-size:10px;color:var(--muted);margin-top:2px}
+.mv-acts{display:flex;gap:6px;margin-bottom:13px;flex-wrap:wrap}
+.act-btn{font-size:11px;font-weight:600;padding:6px 13px;border:1px solid var(--border);border-radius:3px;cursor:pointer;background:#fff;color:var(--mid);white-space:nowrap}
+.act-btn.pri{background:var(--green);color:#fff;border-color:var(--green)}
+.act-btn:hover{background:var(--subtle)}.act-btn.pri:hover{background:#004A3E}
+.mv-tbl-wrap{overflow-x:auto;border:1px solid var(--border);border-radius:3px;background:#fff;margin-bottom:18px}
+table.mv-tbl{width:100%;border-collapse:collapse;font-size:12px}
+table.mv-tbl th{background:#F4F6F5;padding:7px 10px;font-size:8.5px;font-weight:800;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);border-bottom:2px solid var(--border);text-align:left;white-space:nowrap}
+table.mv-tbl td{padding:9px 10px;border-bottom:1px solid var(--subtle);font-variant-numeric:tabular-nums;color:var(--mid)}
+table.mv-tbl tr:last-child td{border-bottom:none}
+table.mv-tbl tr:hover td{background:#FAFCFB}
+.bdg{display:inline-block;font-size:9px;font-weight:700;padding:2px 7px;border-radius:2px;letter-spacing:.3px;text-transform:uppercase}
+.bdg.ok{background:#EAF4EE;color:#1B6B45;border:1px solid rgba(27,107,69,.15)}
+.bdg.em{background:#FBF4E4;color:#8A6308;border:1px solid rgba(138,99,8,.15)}
+.bdg.cr{background:#FAF0EE;color:#9E2D21;border:1px solid rgba(158,45,33,.15)}
+.mv-note{background:#fff;border:1px solid var(--border);border-radius:3px;padding:12px 15px;font-size:12px;color:var(--mid);line-height:1.65}
+</style>
+</head>
+<body>
+
+<nav class="nav">
+  <div class="logo">Sa<span>nad</span></div>
+  <div class="ndiv"></div>
+  <div class="nsub">DHA Planning Platform · 2026–2040</div>
+  <div class="nlinks">
+    <span class="na on"  onclick="switchNav('dashboard',this)">Dashboard</span>
+    <span class="na"     onclick="switchNav('supply',this)">Supply</span>
+    <span class="na"     onclick="switchNav('gaps',this)">Gap Analysis</span>
+    <span class="na"     onclick="switchNav('demand',this)">Demand Model</span>
+    <span class="na"     onclick="switchNav('bench',this)">Benchmarking</span>
+    <span class="na"     onclick="switchNav('workforce',this)">Workforce</span>
+    <span class="na"     onclick="switchNav('investor',this)">Investor</span>
+    <span class="na"     onclick="switchNav('reports',this)">Reports</span>
+  </div>
+  <div class="nbadge" title="Not affiliated with or endorsed by the Dubai Health Authority. All figures are illustrative.">Concept prototype · illustrative data</div>
+</nav>
+
+<div class="stats">
+  <div class="stat"><div class="slbl">Districts Analysed</div><div class="sval">15</div><div class="snote">Greater Dubai</div></div>
+  <div class="stat"><div class="slbl">Critical Gap Zones</div><div class="sval c">5</div><div class="snote">Immediate action required</div></div>
+  <div class="stat"><div class="slbl">Beds Deficit — 2030</div><div class="sval t">3,240</div><div class="snote">Across all districts</div></div>
+  <div class="stat"><div class="slbl">Specialist Shortfall</div><div class="sval e">1,085</div><div class="snote">All specialties · 2026</div></div>
+  <div class="stat"><div class="slbl">Population 2040 (est.)</div><div class="sval">4.8M</div><div class="snote">+38% from 2026 baseline</div></div>
+  <div class="stat-scope">Dubai Health Authority<br>Capacity Plan 2026–2040</div>
+</div>
+
+<div class="main">
+  <div class="sb">
+    <div class="sb-hd">
+      <div class="sb-title">Planning Zones</div>
+      <div class="frow">
+        <button class="fb on" onclick="filterBy('all',this)">All</button>
+        <button class="fb" onclick="filterBy('c',this)">Critical</button>
+        <button class="fb" onclick="filterBy('e',this)">Emerging</button>
+        <button class="fb" onclick="filterBy('ok',this)">Adequate</button>
+      </div>
+    </div>
+    <div class="sb-list" id="sb-list"></div>
+  </div>
+
+  <div class="mapw">
+    <div id="map"></div>
+    <div class="mleg">
+      <div class="mleg-t">Gap Severity</div>
+      <div class="mleg-r"><div class="mleg-d" style="background:#B8382A"></div><span>Critical</span></div>
+      <div class="mleg-r"><div class="mleg-d" style="background:#D8A520"></div><span>Emerging</span></div>
+      <div class="mleg-r"><div class="mleg-d" style="background:#1A6E46"></div><span>Adequate</span></div>
+      <div class="mleg-note">Circle size = population</div>
+    </div>
+  </div>
+
+  <div class="rp">
+    <div class="rp-hd">
+      <div class="rp-dn"><span id="rp-name">Select a District</span><span class="stag" id="rp-tag"></span></div>
+      <div class="rp-meta" id="rp-meta">Click a district on the map or from the planning zones list</div>
+    </div>
+    <div class="tabs">
+      <div class="tab on"  data-tab="gaps"    onclick="goTab('gaps',this)">Gaps</div>
+      <div class="tab"     data-tab="fc"      onclick="goTab('fc',this)">Forecast</div>
+      <div class="tab"     data-tab="brief"   onclick="goTab('brief',this)">Analysis</div>
+      <div class="tab"     data-tab="submit"  onclick="goTab('submit',this)">Submit Data</div>
+    </div>
+    <div class="tb">
+      <div class="pane on" id="pane-gaps"><div class="empty"><div class="ei">📍</div>Select a planning zone to view gap analysis</div></div>
+      <div class="pane"    id="pane-fc"><div class="empty"><div class="ei">📈</div>Select a planning zone to view the demand forecast</div></div>
+      <div class="pane"    id="pane-brief"><div class="empty"><div class="ei">📋</div>Select a planning zone to generate a planning brief</div></div>
+      <div class="pane"    id="pane-submit"></div>
+    </div>
+  </div>
+</div>
+
+<div class="mod-view" id="mod-view" style="display:none"></div>
+<div class="toast" id="toast"></div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script>
+const DS = [
+  {id:'deira',name:'Deira',area:'North Dubai',lat:25.2697,lng:55.3094,pop:325000,sev:'c',
+   beds:{s:420,d:890},spec:{s:145,d:290},gp:{s:22,d:48},nur:{s:680,d:1200},
+   gaps:['Mental Health','Geriatrics','Oncology','Emergency'],
+   dy:[890,940,1020,1100,1180,1260,1320],sy:[420,445,482,525,575,620,660],
+   ratios:{bed:'1.29',who:'3.50',resp:'19 min'},
+   body:'Deira presents the most acute capacity shortfall in Greater Dubai. A bed-to-population ratio of 1.29 per 1,000 is less than half the WHO planning benchmark of 3.50. The district has an ageing resident base driving above-average demand in geriatric, oncology, and long-term care — services with negligible current provision. Mental health facilities are entirely absent; an estimated 30% of residents have unmet psychiatric needs.',
+   recs:[{t:'Expand Al Maktoum Hospital — 350 acute beds',d:'Phase 1: ICU and geriatric wards. Estimated AED 520M. Target: Q3 2027.'},{t:'Commission 4 new Primary Health Centres',d:'Distributed across high-density residential clusters to reduce ED overflow.'},{t:'Standalone mental health outpatient facility',d:'Capacity: 120 slots/day. Fast-track Sheryan licensing pathway recommended.'}]},
+
+  {id:'intcity',name:'International City',area:'South-East Dubai',lat:25.1680,lng:55.4135,pop:190000,sev:'c',
+   beds:{s:80,d:460},spec:{s:32,d:175},gp:{s:8,d:42},nur:{s:130,d:620},
+   gaps:['Primary Care','Emergency','All Specialties'],
+   dy:[460,500,550,605,660,710,760],sy:[80,92,108,128,153,178,205],
+   ratios:{bed:'0.42',who:'3.50',resp:'19 min'},
+   body:'International City is the most underserved district in Dubai across every planning metric: 0.42 beds per 1,000 residents, no public hospital within 12 km, and a workforce population predominantly without private insurance. Emergency ambulance response times average 19 minutes — nearly double the DHA 10-minute standard. This represents a healthcare access failure requiring immediate multi-agency intervention.',
+   recs:[{t:'PRIORITY: 120-bed district general hospital',d:'Fast-tracked public facility; AED 220M. 24-month delivery target.'},{t:'Digital health kiosks — immediate deployment',d:'3 video consultation kiosks operational within 90 days pending hospital construction.'},{t:'GP licence incentive programme',d:'Waive fit-out fees for first 10 private GPs establishing in the district.'}]},
+
+  {id:'alqusais',name:'Al Qusais',area:'East Dubai',lat:25.2703,lng:55.3760,pop:215000,sev:'c',
+   beds:{s:180,d:520},spec:{s:65,d:185},gp:{s:14,d:38},nur:{s:290,d:740},
+   gaps:['Obstetrics','General Surgery','Radiology'],
+   dy:[520,560,610,660,720,770,820],sy:[180,196,218,244,274,302,332],
+   ratios:{bed:'0.84',who:'3.50',resp:'14 min'},
+   body:'Al Qusais has a 0.84 bed-to-population ratio and no dedicated hospital. The district hosts a large immigrant workforce with high demand for reproductive health and surgical services. Obstetric capacity at neighbouring facilities is at chronic overflow; maternity diversions are a weekly occurrence. Population growth of 15% expected by 2030 will compound shortfalls across all service lines.',
+   recs:[{t:'Al Qusais Medical City — 200-bed hospital',d:'Phase 1: maternity, surgery, radiology. Estimated AED 380M, delivery 2028.'},{t:'Mobile radiology units (interim)',d:'3 units operational by Q2 2027 to bridge diagnostic gap until hospital opens.'}]},
+
+  {id:'jebelali',name:'Jebel Ali',area:'South Dubai',lat:24.9850,lng:55.0730,pop:97000,sev:'c',
+   beds:{s:95,d:280},spec:{s:38,d:120},gp:{s:9,d:28},nur:{s:150,d:390},
+   gaps:['Trauma / Emergency','Industrial Medicine','Surgery'],
+   dy:[280,305,335,370,405,435,465],sy:[95,107,122,140,162,182,204],
+   ratios:{bed:'0.98',who:'3.50',resp:'22 min'},
+   body:'Jebel Ali is a major port and industrial zone with elevated occupational injury rates and inadequate trauma capacity. The nearest Level 1 trauma centre is 28 km distant, generating unacceptable outcomes for time-critical injuries. Industrial medicine protocols are absent from current licensing classifications applied to this zone, creating regulatory and safety gaps.',
+   recs:[{t:'Level 2 Trauma Centre',d:'24/7 trauma stabilisation required for industrial zone. AED 145M, 24-month delivery.'},{t:'JAFZA occupational health clinic (mandatory)',d:'Employer-funded PPP model; trauma stabilisation capability included.'}]},
+
+  {id:'burdubai',name:'Bur Dubai',area:'Central Dubai',lat:25.2532,lng:55.2983,pop:278000,sev:'e',
+   beds:{s:380,d:610},spec:{s:160,d:260},gp:{s:28,d:42},nur:{s:620,d:920},
+   gaps:['Cardiology','Diabetes Care','Paediatrics'],
+   dy:[610,650,700,750,800,840,880],sy:[380,400,430,462,500,534,568],
+   ratios:{bed:'1.37',who:'3.50',resp:'11 min'},
+   body:'Bur Dubai shows a moderate-to-high gap profile driven by high diabetes and cardiovascular disease prevalence in a large working-age population. Cardiology demand is growing at 8% annually, outpacing supply growth by 2.4×. Endocrinology outpatient slots are fully booked 6 weeks in advance. Without intervention, capacity utilisation will exceed 95% across all service lines by 2028.',
+   recs:[{t:'2 integrated diabetes-cardiology centres',d:'Combined endocrinology and lifestyle clinics; capacity 3,200 patients/month.'},{t:'Catheterisation lab at Rashid Hospital',d:'Reduces out-of-district referrals by ~40%. AED 85M, 18-month delivery.'}]},
+
+  {id:'mirdif',name:'Mirdif',area:'East Dubai',lat:25.2130,lng:55.4148,pop:168000,sev:'e',
+   beds:{s:220,d:390},spec:{s:95,d:175},gp:{s:18,d:32},nur:{s:360,d:580},
+   gaps:['Physiotherapy','Orthopaedics','Rehabilitation'],
+   dy:[390,415,450,490,530,565,600],sy:[220,236,256,280,305,330,355],
+   ratios:{bed:'1.31',who:'3.50',resp:'12 min'},
+   body:'Mirdif serves an affluent suburban population with growing demand for elective and rehabilitative care. Allied health shortfalls — physiotherapy, occupational therapy — are projected to triple by 2035 as the population ages in place. Strong private-sector commercial interest in this catchment makes PPP structuring viable for a rehabilitation facility.',
+   recs:[{t:'Rehabilitation care centre via PPP',d:'150-bed facility; private operator model. Demand is immediate and bankable.'},{t:'Allied health Emiratization programme',d:'40 UAE-national physiotherapy placements by 2027 with guaranteed district placement.'}]},
+
+  {id:'alnahda',name:'Al Nahda',area:'North-East Dubai',lat:25.2860,lng:55.3720,pop:196000,sev:'e',
+   beds:{s:210,d:430},spec:{s:80,d:172},gp:{s:16,d:36},nur:{s:330,d:620},
+   gaps:['Neurology','Internal Medicine','Psychiatry'],
+   dy:[430,460,500,545,590,630,670],sy:[210,226,248,272,298,322,348],
+   ratios:{bed:'1.07',who:'3.50',resp:'13 min'},
+   body:'Al Nahda has a dense working-age population with growing neurological and psychiatric demand linked to occupational stress. Internal medicine outpatient utilisation stands at 91% — overflow territory. Strategic co-location of neurology and mental health services would reduce duplication and improve referral efficiency within the district.',
+   recs:[{t:'Integrated neuro-psychiatric centre',d:'90-bed specialist facility; co-located with existing outpatient infrastructure.'},{t:'Telemedicine programme for psychiatric triage',d:'Digital-first triage to offload 30% of in-person psychiatric demand within 12 months.'}]},
+
+  {id:'bizzbay',name:'Business Bay',area:'Central Dubai',lat:25.1840,lng:55.2640,pop:98000,sev:'e',
+   beds:{s:140,d:280},spec:{s:88,d:145},gp:{s:12,d:24},nur:{s:220,d:410},
+   gaps:['After-hours Primary Care','Occupational Health','Dental'],
+   dy:[280,300,330,360,395,425,455],sy:[140,152,168,187,210,230,252],
+   ratios:{bed:'1.43',who:'3.50',resp:'10 min'},
+   body:"Business Bay's commercial population creates acute weekday demand spikes with facilities consistently above 95% utilisation during business hours. After-hours primary care access is critically absent — workers travel to Bur Dubai for evening consultations. Dental services are 40% undersupplied relative to daytime population estimates.",
+   recs:[{t:'After-hours Primary Health Centre (24/7)',d:'One licensed PHC serving commercial workforce outside business hours. AED 18M capex.'},{t:'Corporate wellness units in Bay Square',d:'Employer co-funded occupational health units; 5 locations by 2027.'}]},
+
+  {id:'albarsha',name:'Al Barsha',area:'West Dubai',lat:25.1112,lng:55.1990,pop:158000,sev:'e',
+   beds:{s:265,d:420},spec:{s:110,d:195},gp:{s:20,d:35},nur:{s:420,d:640},
+   gaps:['Paediatrics','Obstetrics','ENT'],
+   dy:[420,448,482,520,558,592,625],sy:[265,280,300,323,348,370,394],
+   ratios:{bed:'1.68',who:'3.50',resp:'11 min'},
+   body:'Al Barsha has a young family demographic with above-average paediatric and obstetric demand. Maternity ward occupancy exceeds 98% regularly; diversions to Umm Suqeim are a standard operational procedure. ENT services carry the longest average wait time in Greater Dubai at 6 weeks. Population growth of 9% per annum will worsen all service line pressures.',
+   recs:[{t:'Paediatric wing expansion — 60 beds',d:'Phase 1 at Al Barsha Health Centre using available site. AED 75M, 15 months.'},{t:'ENT dedicated outpatient clinic',d:'5 consultation rooms, standalone facility. Sheryan pathway: 12 months.'}]},
+
+  {id:'dso',name:'Dubai Silicon Oasis',area:'East Dubai',lat:25.1200,lng:55.3760,pop:112000,sev:'e',
+   beds:{s:160,d:290},spec:{s:72,d:130},gp:{s:14,d:26},nur:{s:240,d:415},
+   gaps:['Ophthalmology','Occupational Health','Physiotherapy'],
+   dy:[290,312,340,372,404,432,460],sy:[160,172,187,204,224,242,262],
+   ratios:{bed:'1.43',who:'3.50',resp:'13 min'},
+   body:'The DSO technology workforce presents specific occupational health needs: musculoskeletal disorders and eye strain are primary presenting conditions. Ophthalmology is over-subscribed by 80% with patients commuting to Downtown. Physiotherapy demand is growing at 18% annually. The DSO Free Zone Authority is a viable co-investor in on-campus health infrastructure.',
+   recs:[{t:'Tech-workforce health centre (on DSO campus)',d:'Occupational health, ophthalmology, and physio co-located with DSOA. PPP structure.'},{t:'3 ophthalmology fast-track licences',d:'Streamlined Sheryan track; existing demand base is bankable immediately.'}]},
+
+  {id:'arabranch',name:'Arabian Ranches',area:'Central Dubai',lat:25.0630,lng:55.2672,pop:76000,sev:'e',
+   beds:{s:120,d:195},spec:{s:58,d:105},gp:{s:10,d:18},nur:{s:195,d:315},
+   gaps:['Family Medicine','Paediatrics','Geriatrics'],
+   dy:[195,210,230,252,275,295,315],sy:[120,130,142,157,173,188,204],
+   ratios:{bed:'1.58',who:'3.50',resp:'15 min'},
+   body:'Arabian Ranches is experiencing population growth of 7.5% annually as new phases are released. Demand for family medicine and paediatrics will double by 2030. The current single-clinic model is structurally unable to serve the growing community; a satellite medical centre is required within 24 months to prevent the district entering critical gap territory.',
+   recs:[{t:'Arabian Ranches Satellite Medical Centre',d:'45-bed community facility with GP, paediatrics, allied health. Phase 3 cluster.'},{t:'Telehealth integration',d:'Video GP consultations to supplement in-person capacity; target 20% of demand by 2027.'}]},
+
+  {id:'marina',name:'Dubai Marina',area:'West Dubai',lat:25.0819,lng:55.1410,pop:126000,sev:'ok',
+   beds:{s:310,d:340},spec:{s:180,d:195},gp:{s:32,d:34},nur:{s:540,d:580},
+   gaps:['Sports Medicine','Dermatology'],
+   dy:[340,355,375,395,415,430,445],sy:[310,320,332,346,361,375,390],
+   ratios:{bed:'2.46',who:'3.50',resp:'9 min'},
+   body:'Dubai Marina is broadly well-served with private clinic density tracking closely to demand. High insurance coverage and an affluent demographic have supported sustained private investment. Minor gaps in sports medicine and dermatology are addressable through existing clinic scope expansion without significant capital outlay.',
+   recs:[{t:'Sports medicine clinic licensing (fast-track)',d:'2 clinics via Sheryan; 6-month setup. Existing demand from Marina Walk fitness population.'},{t:'Dermatology scope extension',d:'Expand scope of 3 existing private clinics; no new facility required.'}]},
+
+  {id:'downtown',name:'Downtown Dubai',area:'Central Dubai',lat:25.1972,lng:55.2744,pop:88000,sev:'ok',
+   beds:{s:240,d:255},spec:{s:165,d:172},gp:{s:28,d:29},nur:{s:450,d:468},
+   gaps:['Medical Tourism Capacity','Executive Health'],
+   dy:[255,265,278,292,308,320,332],sy:[240,248,257,268,280,292,305],
+   ratios:{bed:'2.73',who:'3.50',resp:'8 min'},
+   body:'Downtown Dubai is in supply-demand equilibrium with well-distributed private healthcare. The area benefits from DHA premium licensing and high institutional capacity. Health tourism is growing at 12% annually, creating a strategic opportunity to position Downtown as a GCC regional medical hub for high-complexity referrals and executive health programmes.',
+   recs:[{t:'Regional medical tourism hub designation',d:'Streamline JCI/ACHSI accreditation support; concierge referral pathways for GCC patients.'},{t:'Executive health centre',d:'Premium 1-day diagnostic centre. Estimated 8,000 corporate visits per year.'}]},
+
+  {id:'jumeirah',name:'Jumeirah',area:'West Dubai',lat:25.2080,lng:55.2400,pop:142000,sev:'ok',
+   beds:{s:290,d:320},spec:{s:175,d:188},gp:{s:30,d:32},nur:{s:520,d:555},
+   gaps:['Preventive Health','Aesthetic Medicine'],
+   dy:[320,332,348,365,382,395,408],sy:[290,300,312,325,340,354,368],
+   ratios:{bed:'2.04',who:'3.50',resp:'9 min'},
+   body:'Jumeirah is well-served with a mix of DHA and high-quality private facilities. Demand growth is modest and within current expansion plans. The high-income demographic creates commercially viable demand for preventive and wellness services that would reduce downstream acute utilisation.',
+   recs:[{t:'Preventive health licensing pathway',d:'Streamlined Sheryan track for integrated wellness clinics; reduce lead time from 18 to 9 months.'}]},
+
+  {id:'dhc',name:'Dubai Healthcare City',area:'Central Dubai',lat:25.2340,lng:55.3160,pop:16000,sev:'ok',
+   beds:{s:580,d:590},spec:{s:320,d:325},gp:{s:45,d:46},nur:{s:900,d:915},
+   gaps:['Tertiary Referral Throughput','Medical Tourism'],
+   dy:[590,622,660,700,742,778,815],sy:[580,612,648,685,724,760,798],
+   ratios:{bed:'36.2',who:'3.50',resp:'6 min'},
+   body:'Dubai Healthcare City operates at near-equilibrium with supply closely tracking demand. As the most densely provisioned medical zone in the MENA region, the strategic priority is not gap-filling but quality positioning. DHC is the logical anchor for a formalised regional referral network, redirecting complex cases from critical-gap districts and absorbing growing medical tourism demand.',
+   recs:[{t:'Formalise tertiary referral network',d:'Structured pathways from International City, Jebel Ali, and Deira. 18-month implementation.'},{t:'Medical tourism expansion — 120 premium beds',d:'Target GCC and international patients. AED 180M, operational 2028.'}]},
+];
+
+const SPECS = ['Cardiology','Oncology','Orthopaedics','Neurology','Paediatrics','Obstetrics','Psychiatry','General Surgery','Radiology','Physiotherapy','Ophthalmology','ENT','Dermatology','Internal Medicine','Emergency Medicine','Geriatrics'];
+const YEARS = ['2026','2028','2030','2032','2034','2036','2040'];
+const SEV_COL = {c:'#B8382A',e:'#D8A520',ok:'#1A6E46'};
+const SEV_LBL = {c:'Critical',e:'Emerging',ok:'Adequate'};
+
+let sel = null, filt = 'all', chartI = null, map, marks = {};
+
+function initMap() {
+  map = L.map('map',{zoomControl:true,attributionControl:false}).setView([25.155,55.28],10);
+  L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',{maxZoom:19}).addTo(map);
+  L.control.attribution({prefix:'© OpenStreetMap · © CARTO · Sanad'}).addTo(map);
+  DS.forEach(d => {
+    const r = Math.min(Math.max(d.pop/11000,10),28);
+    const m = L.circleMarker([d.lat,d.lng],{radius:r,fillColor:SEV_COL[d.sev],color:'#fff',weight:2.5,opacity:1,fillOpacity:0.82}).addTo(map);
+    const g = d.beds.s - d.beds.d;
+    m.bindPopup(`<div class="pop"><div class="pop-n">${d.name}</div>
+      <div class="pop-r"><span>${d.area}</span><span>${(d.pop/1000).toFixed(0)}K residents</span></div>
+      <div class="pop-r"><span>Beds supply / demand</span><span><b>${d.beds.s} / ${d.beds.d}</b></span></div>
+      <div class="pop-r"><span>Bed gap</span><span style="color:${g<0?'#B8382A':'#1A6E46'};font-weight:700">${g>0?'+':''}${g}</span></div>
+      <div class="pop-f">Click to open district analysis →</div></div>`,{maxWidth:250});
+    m.on('click', () => pickDistrict(d.id));
+    marks[d.id] = m;
+  });
+}
+
+function pickDistrict(id) {
+  const d = DS.find(x => x.id === id);
+  if (!d) return;
+  sel = d;
+  // Always reset to Gaps tab on new district
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('on'));
+  document.querySelectorAll('.pane').forEach(p => p.classList.remove('on'));
+  document.querySelector('[data-tab="gaps"]').classList.add('on');
+  document.getElementById('pane-gaps').classList.add('on');
+
+  document.querySelectorAll('.dr').forEach(el => el.classList.toggle('sel', el.dataset.id === id));
+  document.getElementById('rp-name').textContent = d.name;
+  document.getElementById('rp-meta').textContent = `${d.area}  ·  Pop. ${(d.pop/1000).toFixed(0)}K  ·  ${d.beds.s} beds current supply`;
+  const tag = document.getElementById('rp-tag');
+  tag.textContent = SEV_LBL[d.sev];
+  tag.className = `stag ${d.sev}`;
+
+  const fd = document.getElementById('fd-district');
+  if (fd) fd.value = d.id;
+
+  map.flyTo([d.lat, d.lng], 13, {duration:0.9});
+  renderGaps(d);
+  renderFC(d);
+  renderBrief(d);
+}
+
+function pct(s,dem) { return Math.min(Math.round((s/dem)*100), 100); }
+function barCol(p) { return p >= 88 ? '#1A6E46' : p >= 60 ? '#D8A520' : '#B8382A'; }
+
+function renderGaps(d) {
+  const rows = [
+    {lbl:'Hospital Beds',       unit:'beds', s:d.beds.s, dem:d.beds.d},
+    {lbl:'Specialist Physicians',unit:'FTEs', s:d.spec.s, dem:d.spec.d},
+    {lbl:'General Practitioners',unit:'FTEs', s:d.gp.s,   dem:d.gp.d},
+    {lbl:'Nursing Staff',       unit:'FTEs', s:d.nur.s,  dem:d.nur.d},
+  ];
+  let h = `<div class="gw">
+    <div class="sec">Capacity vs Demand — 2026 Baseline</div>
+    <table class="gt">
+      <tr><th>Metric</th><th>Supply</th><th>Demand</th><th>Gap</th><th>Coverage</th></tr>`;
+  rows.forEach(r => {
+    const p = pct(r.s,r.dem), g = r.s - r.dem, cls = g<0?'neg':'pos', c = barCol(p);
+    h += `<tr>
+      <td>${r.lbl}</td>
+      <td>${r.s.toLocaleString()}</td>
+      <td>${r.dem.toLocaleString()}</td>
+      <td class="${cls}">${g>0?'+':''}${g.toLocaleString()}</td>
+      <td><div class="pctw"><div class="pct-tr"><div class="pct-fi" style="width:${p}%;background:${c}"></div></div><span style="font-size:11px;min-width:28px">${p}%</span></div></td>
+    </tr>`;
+  });
+  h += `</table>`;
+  h += `<div class="tags-row"><div class="tags-lbl">Priority Specialties</div>`;
+  d.gaps.forEach(g => h += `<span class="gt-tag">${g}</span>`);
+  h += `</div></div>`;
+  document.getElementById('pane-gaps').innerHTML = h;
+}
+
+function renderFC(d) {
+  document.getElementById('pane-fc').innerHTML = `<div class="fw">
+    <div class="cl"><div class="cl-i"><div class="cl-ln" style="background:#B8382A"></div>Projected demand</div><div class="cl-i"><div class="cl-ln" style="background:#1A6E46"></div>Planned supply</div></div>
+    <div class="ch"><canvas id="fch"></canvas></div>
+    <div class="fn">Demand: 2.8% annual population growth + 1.4% ageing-adjusted utilisation uplift + non-resident demand factor.<br>Supply: confirmed DHA capital programme + private pipeline commitments.</div>
+  </div>`;
+  if (chartI) { chartI.destroy(); chartI = null; }
+  chartI = new Chart(document.getElementById('fch').getContext('2d'), {
+    type:'line',
+    data:{labels:YEARS,datasets:[
+      {label:'Demand',data:d.dy,borderColor:'#B8382A',backgroundColor:'rgba(184,56,42,.06)',fill:true,tension:0.3,borderWidth:2,pointRadius:4,pointBackgroundColor:'#B8382A'},
+      {label:'Supply',data:d.sy,borderColor:'#1A6E46',backgroundColor:'rgba(26,110,70,.06)',fill:true,tension:0.3,borderWidth:2,pointRadius:4,pointBackgroundColor:'#1A6E46'}
+    ]},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},
+      scales:{y:{grid:{color:'#EAECEF'},ticks:{font:{size:10}}},x:{grid:{display:false},ticks:{font:{size:10}}}}}
+  });
+}
+
+function renderBrief(d) {
+  const g = d.beds.s - d.beds.d;
+  let h = `<div class="bw">
+    <div class="bh">District Planning Brief — ${d.name}</div>
+    <div class="bgrid">
+      <div class="bgi"><div class="bgi-l">District</div><div class="bgi-v">${d.name}, ${d.area}</div></div>
+      <div class="bgi"><div class="bgi-l">Classification</div><div class="bgi-v" style="color:${SEV_COL[d.sev]}">${SEV_LBL[d.sev]}</div></div>
+      <div class="bgi"><div class="bgi-l">Population</div><div class="bgi-v">${d.pop.toLocaleString()}</div></div>
+      <div class="bgi"><div class="bgi-l">Bed ratio (current)</div><div class="bgi-v">${d.ratios.bed} / 1,000</div></div>
+      <div class="bgi"><div class="bgi-l">WHO benchmark</div><div class="bgi-v">${d.ratios.who} / 1,000</div></div>
+      <div class="bgi"><div class="bgi-l">Bed gap (2026)</div><div class="bgi-v" style="color:${g<0?'var(--crit)':'var(--ok)'}">${g>0?'+':''}${g.toLocaleString()}</div></div>
+    </div>
+    <div class="bbody">${d.body}</div>
+    <div class="recs-t">Recommended Interventions</div>`;
+  d.recs.forEach((r,i) => h += `<div class="rec"><div class="rn">${i+1}</div><div><div class="rt">${r.t}</div><div class="rd">${r.d}</div></div></div>`);
+  h += `</div>`;
+  document.getElementById('pane-brief').innerHTML = h;
+}
+
+function buildSubmit() {
+  const pane = document.getElementById('pane-submit');
+  let opts = DS.map(d => `<option value="${d.id}">${d.name}</option>`).join('');
+  let specs = SPECS.map(s => `<label class="spitem"><input type="checkbox"><span>${s}</span></label>`).join('');
+  pane.innerHTML = `<div class="sw">
+    <div class="snote-top"><strong>Sheryan Integration Active</strong> — Data submitted here is validated against the DHA Sheryan licensing platform. Ensure your facility licence number matches.</div>
+    <div class="fsec">
+      <div class="fsec-t">Facility Registration</div>
+      <div class="fr"><label>Facility Name</label><input type="text" placeholder="e.g. Al Rashid Medical Centre"></div>
+      <div class="fr"><label>Facility Type</label><select><option>Hospital</option><option>Polyclinic</option><option>Primary Health Centre</option><option>Specialty Clinic</option><option>Day Surgery Centre</option><option>Ambulatory Care Centre</option></select></div>
+      <div class="fr"><label>District / Planning Zone</label><select id="fd-district">${opts}</select></div>
+      <div class="fr"><label>Ownership Sector</label><select><option>Public — Dubai Health Authority</option><option>Private</option><option>Semi-Government</option><option>PPP / Joint Venture</option></select></div>
+      <div class="fr"><label>Sheryan Licence Number</label><input type="text" placeholder="DHA-YYYY-XXXXXX"></div>
+    </div>
+    <div class="fsec">
+      <div class="fsec-t">Bed Capacity by Type</div>
+      <div class="fgrid">
+        <div class="fr"><label>Acute Overnight</label><input type="number" placeholder="0"></div>
+        <div class="fr"><label>Day Surgery</label><input type="number" placeholder="0"></div>
+        <div class="fr"><label>ICU / HDU</label><input type="number" placeholder="0"></div>
+        <div class="fr"><label>Psychiatric</label><input type="number" placeholder="0"></div>
+        <div class="fr"><label>Rehabilitation</label><input type="number" placeholder="0"></div>
+        <div class="fr"><label>Long-term</label><input type="number" placeholder="0"></div>
+      </div>
+    </div>
+    <div class="fsec">
+      <div class="fsec-t">Clinical Workforce (FTEs)</div>
+      <div class="fgrid">
+        <div class="fr"><label>Physicians</label><input type="number" placeholder="0"></div>
+        <div class="fr"><label>Nurses</label><input type="number" placeholder="0"></div>
+        <div class="fr"><label>Allied Health</label><input type="number" placeholder="0"></div>
+        <div class="fr"><label>Pharmacists</label><input type="number" placeholder="0"></div>
+      </div>
+    </div>
+    <div class="fsec">
+      <div class="fsec-t">Specialties Offered</div>
+      <div class="spgrid">${specs}</div>
+    </div>
+    <button class="sbtn" onclick="doSubmit()">Submit Capacity Data</button>
+    <div class="sub-fn">Submission queued for DHA validation · All data compliant with UAE Data Protection Law</div>
+  </div>`;
+}
+
+function doSubmit() {
+  showToast('Capacity data submitted — queued for Sheryan validation');
+}
+
+function renderSidebar() {
+  const sevOrd = {c:0,e:1,ok:2};
+  let data = filt === 'all' ? DS : DS.filter(d => d.sev === filt);
+  data = [...data].sort((a,b) => sevOrd[a.sev] - sevOrd[b.sev]);
+  document.getElementById('sb-list').innerHTML = data.map(d => {
+    const g = d.beds.s - d.beds.d;
+    return `<div class="dr${sel?.id===d.id?' sel':''}" data-id="${d.id}" onclick="pickDistrict('${d.id}')">
+      <div class="dsev ${d.sev}"></div>
+      <div class="di"><div class="dname">${d.name}</div><div class="dmeta">${d.area} · ${(d.pop/1000).toFixed(0)}K pop</div></div>
+      <div class="dgap ${d.sev}">${g>0?'+':''}${g}</div>
+    </div>`;
+  }).join('');
+}
+
+function filterBy(v, btn) {
+  filt = v;
+  document.querySelectorAll('.fb').forEach(b => b.classList.remove('on'));
+  btn.classList.add('on');
+  renderSidebar();
+}
+
+function goTab(name, btn) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('on'));
+  document.querySelectorAll('.pane').forEach(p => p.classList.remove('on'));
+  btn.classList.add('on');
+  document.getElementById(`pane-${name}`).classList.add('on');
+  if (name === 'fc' && sel) renderFC(sel);
+}
+
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 3000);
+}
+
+/* ── MODULE NAVIGATION ── */
+function switchNav(name, el) {
+  document.querySelectorAll('.na').forEach(n => n.classList.remove('on'));
+  el.classList.add('on');
+  const main = document.querySelector('.main');
+  const mv = document.getElementById('mod-view');
+  if (name === 'dashboard') {
+    main.style.display = 'grid';
+    mv.style.display = 'none';
+    if (map) setTimeout(() => map.invalidateSize(), 50);
+  } else {
+    main.style.display = 'none';
+    mv.style.display = 'block';
+    const fns = {supply:supplyView,gaps:gapsView,demand:demandView,bench:benchView,workforce:workforceView,investor:investorView,reports:reportsView};
+    if (fns[name]) mv.innerHTML = fns[name]();
+  }
+}
+
+/* ── SUPPLY MODULE ── */
+function supplyView() {
+  const facs = [
+    {n:'Al Maktoum Hospital',t:'Hospital',d:'Deira',sh:'DHA-2026-004521',beds:420,phys:145,s:'ok'},
+    {n:'Rashid Hospital',t:'Hospital',d:'Bur Dubai',sh:'DHA-2026-002018',beds:380,phys:160,s:'ok'},
+    {n:'Dubai Healthcare City MC',t:'Hospital',d:'DHC',sh:'DHA-2026-008734',beds:580,phys:320,s:'ok'},
+    {n:'Mediclinic Welcare',t:'Hospital',d:'Al Garhoud',sh:'DHA-2026-006812',beds:140,phys:88,s:'ok'},
+    {n:'Saudi German Hospital',t:'Hospital',d:'Al Barsha',sh:'DHA-2026-009231',beds:265,phys:110,s:'em'},
+    {n:'Int\'l City Polyclinic',t:'Polyclinic',d:'International City',sh:'DHA-2026-011445',beds:12,phys:18,s:'em'},
+    {n:'DSO Health Centre',t:'PHC',d:'Dubai Silicon Oasis',sh:'DHA-2026-014002',beds:0,phys:14,s:'em'},
+    {n:'Jebel Ali Clinic',t:'PHC',d:'Jebel Ali',sh:'DHA-2026-015889',beds:0,phys:9,s:'cr'},
+  ];
+  const sLbl = {ok:'Validated',em:'Pending',cr:'Not Started'};
+  return `<div class="mv">
+    <div class="mv-hd"><div class="mv-title">Supply Capture &amp; Capacity Assessment</div><div class="mv-sub">RFP Scope Item 1 · Module 1 · Standardised data collection from all licensed DHA facilities · Sheryan-validated</div></div>
+    <div class="mv-metrics">
+      <div class="mv-met"><div class="mv-met-l">Facilities Registered</div><div class="mv-met-v" style="color:var(--teal)">847</div><div class="mv-met-n">Across all DHA zones</div></div>
+      <div class="mv-met"><div class="mv-met-l">Sheryan Validated</div><div class="mv-met-v" style="color:var(--ok)">623</div><div class="mv-met-n">73.6% completion rate</div></div>
+      <div class="mv-met"><div class="mv-met-l">Pending Review</div><div class="mv-met-v" style="color:var(--emer)">142</div><div class="mv-met-n">Submitted, under validation</div></div>
+      <div class="mv-met"><div class="mv-met-l">Not Started</div><div class="mv-met-v" style="color:var(--crit)">82</div><div class="mv-met-n">Outreach required</div></div>
+      <div class="mv-met"><div class="mv-met-l">Last Sheryan Sync</div><div class="mv-met-v" style="font-size:14px;padding-top:3px">Today 06:30</div><div class="mv-met-n">Automated daily pull</div></div>
+    </div>
+    <div class="mv-acts">
+      <button class="act-btn pri" onclick="showToast('New facility submission form opened')">+ New Submission</button>
+      <button class="act-btn" onclick="showToast('Exporting facility data as CSV…')">Export CSV</button>
+      <button class="act-btn" onclick="showToast('Sheryan validation batch running…')">Run Sheryan Validation</button>
+      <button class="act-btn" onclick="showToast('Sending reminders to 82 facilities…')">Send Reminders</button>
+    </div>
+    <div class="mv-sec">Licensed Facility Register — showing 8 of 847</div>
+    <div class="mv-tbl-wrap"><table class="mv-tbl">
+      <tr><th>Facility</th><th>Type</th><th>District</th><th>Sheryan Licence</th><th>Beds</th><th>Physicians</th><th>Status</th><th>Last Updated</th></tr>
+      ${facs.map(f=>`<tr>
+        <td style="font-weight:600;color:var(--text)">${f.n}</td>
+        <td>${f.t}</td><td>${f.d}</td>
+        <td style="font-family:monospace;font-size:11px">${f.sh}</td>
+        <td>${f.beds}</td><td>${f.phys}</td>
+        <td><span class="bdg ${f.s}">${sLbl[f.s]}</span></td>
+        <td style="color:var(--muted);font-size:11px">${f.s==='cr'?'—':'Jun 2026'}</td>
+      </tr>`).join('')}
+    </table></div>
+  </div>`;
+}
+
+/* ── GAP ANALYSIS FULL PAGE ── */
+function gapsView() {
+  const sorted = [...DS].sort((a,b)=>({c:0,e:1,ok:2}[a.sev]-{c:0,e:1,ok:2}[b.sev]));
+  const sTag = s => `<span class="bdg ${s==='c'?'cr':s==='e'?'em':'ok'}">${SEV_LBL[s]}</span>`;
+  const gStyle = v => v<0?'style="color:var(--crit);font-weight:700"':'style="color:var(--ok);font-weight:600"';
+  return `<div class="mv">
+    <div class="mv-hd"><div class="mv-title">Gap Analysis &amp; Capacity Requirements</div><div class="mv-sub">RFP Scope Item 4 · Module 3 · All 15 planning zones · Supply vs Demand 2026 baseline · Short / medium / long-term horizon</div></div>
+    <div class="mv-metrics">
+      <div class="mv-met"><div class="mv-met-l">Critical Zones</div><div class="mv-met-v" style="color:var(--crit)">5</div><div class="mv-met-n">Coverage &lt;65% of demand</div></div>
+      <div class="mv-met"><div class="mv-met-l">Total Bed Deficit</div><div class="mv-met-v" style="color:var(--crit)">−3,240</div><div class="mv-met-n">Beds below demand across all zones</div></div>
+      <div class="mv-met"><div class="mv-met-l">Specialist Shortfall</div><div class="mv-met-v" style="color:var(--emer)">−1,085</div><div class="mv-met-n">Physician FTEs — all specialties</div></div>
+      <div class="mv-met"><div class="mv-met-l">Nursing Gap</div><div class="mv-met-v" style="color:var(--emer)">−3,850</div><div class="mv-met-n">FTEs below demand</div></div>
+      <div class="mv-met"><div class="mv-met-l">GP Gap</div><div class="mv-met-v" style="color:var(--teal)">−312</div><div class="mv-met-n">FTEs below demand</div></div>
+    </div>
+    <div class="mv-acts">
+      <button class="act-btn" onclick="showToast('Exporting gap analysis as Excel…')">Export Excel</button>
+      <button class="act-btn" onclick="showToast('Generating PDF gap report…')">Export PDF</button>
+    </div>
+    <div class="mv-sec">All Districts — Gap vs Demand · 2026 Baseline</div>
+    <div class="mv-tbl-wrap"><table class="mv-tbl">
+      <tr><th>District</th><th>Severity</th><th>Beds Supply</th><th>Beds Demand</th><th>Beds Gap</th><th>Spec Supply</th><th>Spec Demand</th><th>Spec Gap</th><th>GP Gap</th><th>Nurse Gap</th></tr>
+      ${sorted.map(d=>{const bg=d.beds.s-d.beds.d,sg=d.spec.s-d.spec.d,gg=d.gp.s-d.gp.d,ng=d.nur.s-d.nur.d;
+      return `<tr>
+        <td style="font-weight:600;color:var(--text)">${d.name}</td>
+        <td>${sTag(d.sev)}</td>
+        <td>${d.beds.s}</td><td>${d.beds.d}</td><td ${gStyle(bg)}>${bg>0?'+':''}${bg}</td>
+        <td>${d.spec.s}</td><td>${d.spec.d}</td><td ${gStyle(sg)}>${sg>0?'+':''}${sg}</td>
+        <td ${gStyle(gg)}>${gg>0?'+':''}${gg}</td>
+        <td ${gStyle(ng)}>${ng>0?'+':''}${ng}</td>
+      </tr>`}).join('')}
+    </table></div>
+  </div>`;
+}
+
+/* ── DEMAND MODEL ── */
+function demandView() {
+  return `<div class="mv">
+    <div class="mv-hd"><div class="mv-title">Demand Estimation &amp; Population Forecasting</div><div class="mv-sub">RFP Scope Item 3 · Module 2 · Three population growth scenarios · Aligned with 2022 Capacity Plan methodology · 2026–2040</div></div>
+    <div style="display:flex;gap:8px;margin-bottom:14px;align-items:center">
+      <span style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted)">Scenario:</span>
+      <button class="act-btn" onclick="showToast('Conservative scenario selected — 1.8% p.a. growth')">Conservative 1.8% p.a.</button>
+      <button class="act-btn pri">Base 2.8% p.a. (active)</button>
+      <button class="act-btn" onclick="showToast('High growth scenario selected — 4.0% p.a.')">High Growth 4.0% p.a.</button>
+    </div>
+    <div class="mv-metrics">
+      <div class="mv-met"><div class="mv-met-l">2026 Baseline Demand (beds)</div><div class="mv-met-v" style="color:var(--teal)">${DS.reduce((a,d)=>a+d.beds.d,0).toLocaleString()}</div><div class="mv-met-n">All 15 districts combined</div></div>
+      <div class="mv-met"><div class="mv-met-l">2030 Projected Demand</div><div class="mv-met-v" style="color:var(--emer)">${Math.round(DS.reduce((a,d)=>a+d.dy[2],0)).toLocaleString()}</div><div class="mv-met-n">Base scenario</div></div>
+      <div class="mv-met"><div class="mv-met-l">2040 Projected Demand</div><div class="mv-met-v" style="color:var(--crit)">${Math.round(DS.reduce((a,d)=>a+d.dy[6],0)).toLocaleString()}</div><div class="mv-met-n">Base scenario (+76%)</div></div>
+      <div class="mv-met"><div class="mv-met-l">Non-resident Demand Factor</div><div class="mv-met-v" style="font-size:14px;padding-top:3px">+12%</div><div class="mv-met-n">UAE/GCC/International uplift</div></div>
+    </div>
+    <div class="mv-sec">District Demand Projections — Beds Required · Base Scenario</div>
+    <div class="mv-tbl-wrap"><table class="mv-tbl">
+      <tr><th>District</th><th>Severity</th><th>2026</th><th>2028</th><th>2030</th><th>2032</th><th>2034</th><th>2036</th><th>2040</th><th>Growth 2026→2040</th></tr>
+      ${[...DS].sort((a,b)=>({c:0,e:1,ok:2}[a.sev]-{c:0,e:1,ok:2}[b.sev])).map(d=>{
+        const grow = Math.round(((d.dy[6]-d.dy[0])/d.dy[0])*100);
+        return `<tr>
+          <td style="font-weight:600;color:var(--text)">${d.name}</td>
+          <td><span class="bdg ${d.sev==='c'?'cr':d.sev==='e'?'em':'ok'}">${SEV_LBL[d.sev]}</span></td>
+          ${d.dy.map(v=>`<td>${v}</td>`).join('')}
+          <td style="font-weight:700;color:var(--crit)">+${grow}%</td>
+        </tr>`;
+      }).join('')}
+    </table></div>
+  </div>`;
+}
+
+/* ── BENCHMARKING ── */
+function benchView() {
+  const rows = [
+    {m:'Acute Beds per 1,000 pop',dha:'1.62',who:'3.50',sg:'2.94',ksa:'2.20',oecd:'4.30',s:'cr'},
+    {m:'Physicians per 1,000 pop',dha:'2.10',who:'1.00',sg:'2.30',ksa:'2.47',oecd:'3.70',s:'em'},
+    {m:'Nurses per 1,000 pop',dha:'3.82',who:'3.00',sg:'6.10',ksa:'5.90',oecd:'8.80',s:'em'},
+    {m:'ICU Beds per 100,000',dha:'9.2',who:'—',sg:'11.4',ksa:'10.8',oecd:'12.0',s:'em'},
+    {m:'PHC Access — % within 15 min walk',dha:'68%',who:'90%',sg:'95%',ksa:'72%',oecd:'91%',s:'cr'},
+    {m:'Hospital Occupancy Rate',dha:'81%',who:'80%',sg:'72%',ksa:'68%',oecd:'75%',s:'ok'},
+    {m:'Health Expenditure (% GDP)',dha:'4.2%',who:'6.0%',sg:'4.5%',ksa:'5.7%',oecd:'9.3%',s:'em'},
+    {m:'Medical Tourism Visits (000s/yr)',dha:'94',who:'—',sg:'1,100',ksa:'320',oecd:'—',s:'ok'},
+  ];
+  return `<div class="mv">
+    <div class="mv-hd"><div class="mv-title">Comparative Analysis &amp; Benchmarking</div><div class="mv-sub">RFP Scope Item 2 · Dubai vs WHO, Singapore, Saudi Arabia, OECD average · Informs planning ratios and scenario assumptions</div></div>
+    <div class="mv-metrics">
+      <div class="mv-met"><div class="mv-met-l">Comparator Systems</div><div class="mv-met-v" style="color:var(--teal)">4</div><div class="mv-met-n">WHO · Singapore · KSA · OECD</div></div>
+      <div class="mv-met"><div class="mv-met-l">Metrics Below WHO</div><div class="mv-met-v" style="color:var(--crit)">2</div><div class="mv-met-n">Beds/1,000 · PHC access</div></div>
+      <div class="mv-met"><div class="mv-met-l">Metrics Approaching Target</div><div class="mv-met-v" style="color:var(--emer)">4</div><div class="mv-met-n">Nurses, ICU, Expenditure, Physicians</div></div>
+      <div class="mv-met"><div class="mv-met-l">Metrics Above WHO Benchmark</div><div class="mv-met-v" style="color:var(--ok)">2</div><div class="mv-met-n">Hospital occupancy · Physician density</div></div>
+    </div>
+    <div class="mv-sec">International Benchmarking Matrix</div>
+    <div class="mv-tbl-wrap"><table class="mv-tbl">
+      <tr><th>Metric</th><th>Dubai — Current</th><th>WHO Benchmark</th><th>Singapore</th><th>Saudi Arabia</th><th>OECD Average</th><th>Dubai Status</th></tr>
+      ${rows.map(r=>`<tr>
+        <td style="font-weight:600;color:var(--text)">${r.m}</td>
+        <td style="font-weight:700">${r.dha}</td>
+        <td style="color:var(--muted)">${r.who}</td>
+        <td>${r.sg}</td><td>${r.ksa}</td><td>${r.oecd}</td>
+        <td><span class="bdg ${r.s}">${r.s==='cr'?'Below Benchmark':r.s==='em'?'Approaching':'Meeting'}</span></td>
+      </tr>`).join('')}
+    </table></div>
+    <div class="mv-sec">Key Planning Implications</div>
+    <div class="mv-note">Dubai's acute bed ratio of 1.62 per 1,000 residents is less than half the WHO planning benchmark of 3.50 — this is the primary gap driving the capacity plan. PHC access is the most actionable short-term intervention: Singapore achieves 95% within a 15-minute walk through a distributed polyclinic network versus Dubai's 68%. Hospital occupancy at 81% exceeds the operational optimum of 75–80%, confirming that utilisation-based demand growth must be treated as a hard ceiling, not a soft projection.</div>
+  </div>`;
+}
+
+/* ── WORKFORCE ── */
+function workforceView() {
+  const rows = [
+    {p:'Physicians — All Specialties',s:6850,d:8200,g:-1350,emPct:18,emTgt:25,priority:'Cardiology, Oncology, Psychiatry'},
+    {p:'Registered Nurses',s:18400,d:22800,g:-4400,emPct:12,emTgt:30,priority:'ICU, Emergency, Mental Health'},
+    {p:'Allied Health — Physiotherapy',s:1240,d:2100,g:-860,emPct:8,emTgt:20,priority:'Musculoskeletal, Rehabilitation'},
+    {p:'Allied Health — Occupational Therapy',s:380,d:720,g:-340,emPct:5,emTgt:20,priority:'Paediatric, Neurological'},
+    {p:'Allied Health — Speech Therapy',s:210,d:450,g:-240,emPct:4,emTgt:20,priority:'Paediatric, Stroke Recovery'},
+    {p:'Allied Health — Psychology',s:290,d:680,g:-390,emPct:6,emTgt:20,priority:'Mental Health, Addiction'},
+    {p:'Pharmacists',s:2800,d:3100,g:-300,emPct:22,emTgt:35,priority:'Hospital, Community'},
+    {p:'Dentists',s:1650,d:1980,g:-330,emPct:15,emTgt:25,priority:'Orthodontics, Paediatric Dentistry'},
+  ];
+  return `<div class="mv">
+    <div class="mv-hd"><div class="mv-title">Workforce Plan</div><div class="mv-sub">RFP Scope Item 7 · Module 7 · Supply and demand by profession · Emiratization tracking aligned with Health Professionals Strategy 2033</div></div>
+    <div class="mv-metrics">
+      <div class="mv-met"><div class="mv-met-l">Total Workforce Gap</div><div class="mv-met-v" style="color:var(--crit)">−8,210</div><div class="mv-met-n">FTEs below 2026 demand</div></div>
+      <div class="mv-met"><div class="mv-met-l">Emiratization — Current</div><div class="mv-met-v" style="color:var(--emer)">14%</div><div class="mv-met-n">UAE nationals in clinical roles</div></div>
+      <div class="mv-met"><div class="mv-met-l">Emiratization — 2030 Target</div><div class="mv-met-v" style="color:var(--teal)">30%</div><div class="mv-met-n">Nursing cadre priority</div></div>
+      <div class="mv-met"><div class="mv-met-l">Allied Health Gap</div><div class="mv-met-v" style="color:var(--crit)">−1,830</div><div class="mv-met-n">Physio, OT, Speech, Psychology</div></div>
+      <div class="mv-met"><div class="mv-met-l">Graduate Pipeline (annual)</div><div class="mv-met-v" style="color:var(--ok)">1,240</div><div class="mv-met-n">UAE health college output</div></div>
+    </div>
+    <div class="mv-acts">
+      <button class="act-btn pri" onclick="showToast('Generating workforce report…')">Generate Report</button>
+      <button class="act-btn" onclick="showToast('Exporting workforce data as Excel…')">Export Excel</button>
+    </div>
+    <div class="mv-sec">Workforce Supply &amp; Demand — 2026 Baseline · Emiratization Tracking</div>
+    <div class="mv-tbl-wrap"><table class="mv-tbl">
+      <tr><th>Profession / Cadre</th><th>Current Supply (FTEs)</th><th>2026 Demand</th><th>Gap</th><th>Emiratization %</th><th>2030 Target</th><th>Priority Specialties</th></tr>
+      ${rows.map(r=>`<tr>
+        <td style="font-weight:600;color:var(--text)">${r.p}</td>
+        <td>${r.s.toLocaleString()}</td><td>${r.d.toLocaleString()}</td>
+        <td style="color:var(--crit);font-weight:700">${r.g.toLocaleString()}</td>
+        <td style="font-weight:700;color:${r.emPct<15?'var(--crit)':'#A8720A'}">${r.emPct}%</td>
+        <td style="color:var(--teal);font-weight:600">${r.emTgt}%</td>
+        <td style="color:var(--muted);font-size:11px">${r.priority}</td>
+      </tr>`).join('')}
+    </table></div>
+  </div>`;
+}
+
+/* ── INVESTOR PORTAL ── */
+function investorView() {
+  const opps = [...DS].filter(d=>d.sev!=='ok').sort((a,b)=>({c:0,e:1}[a.sev]-{c:0,e:1}[b.sev]));
+  return `<div class="mv">
+    <div class="mv-hd"><div class="mv-title">Investor Feasibility Portal</div><div class="mv-sub">RFP Module 5 · Live gap data linked to investment opportunities · Rapid online feasibility studies for public and private investors</div></div>
+    <div class="mv-metrics">
+      <div class="mv-met"><div class="mv-met-l">Open Opportunities</div><div class="mv-met-v" style="color:var(--teal)">${opps.length}</div><div class="mv-met-n">Gap zones with investment need</div></div>
+      <div class="mv-met"><div class="mv-met-l">DHA Fast-track Eligible</div><div class="mv-met-v" style="color:var(--crit)">5</div><div class="mv-met-n">Critical zones · streamlined Sheryan</div></div>
+      <div class="mv-met"><div class="mv-met-l">Total Beds Required</div><div class="mv-met-v" style="color:var(--emer)">3,240</div><div class="mv-met-n">Across all gap zones</div></div>
+      <div class="mv-met"><div class="mv-met-l">Indicative Capital Needed</div><div class="mv-met-v" style="color:var(--teal)">AED 4.8B</div><div class="mv-met-n">Combined all opportunities</div></div>
+    </div>
+    <div class="mv-acts">
+      <button class="act-btn pri" onclick="showToast('Generating investor brief PDF…')">Generate Investor Brief</button>
+      <button class="act-btn" onclick="showToast('Exporting opportunities as Excel…')">Export Excel</button>
+      <button class="act-btn" onclick="showToast('Opening feasibility model…')">Run Feasibility Model</button>
+    </div>
+    <div class="mv-sec">Investment Opportunities — Ranked by Gap Severity</div>
+    <div class="mv-tbl-wrap"><table class="mv-tbl">
+      <tr><th>District</th><th>Area</th><th>Severity</th><th>Priority Specialty</th><th>Beds Gap</th><th>Indicative Capital</th><th>Preferred Model</th><th>DHA Fast-track</th></tr>
+      ${opps.map(d=>{const g=Math.abs(d.beds.s-d.beds.d);
+      return `<tr>
+        <td style="font-weight:600;color:var(--text);cursor:pointer" onclick="switchNav('dashboard',document.querySelector('[onclick*=dashboard]'));pickDistrict('${d.id}')">${d.name} ↗</td>
+        <td style="color:var(--muted)">${d.area}</td>
+        <td><span class="bdg ${d.sev==='c'?'cr':'em'}">${SEV_LBL[d.sev]}</span></td>
+        <td>${d.gaps[0]}</td>
+        <td style="font-weight:700">${g}</td>
+        <td style="font-weight:700;font-variant-numeric:tabular-nums">AED ${Math.round(g*1.4)}M</td>
+        <td style="font-size:11px">${d.sev==='c'?'PPP / Public':'Private / PPP'}</td>
+        <td><span class="bdg ${d.sev==='c'?'ok':'em'}">${d.sev==='c'?'Yes':'Conditional'}</span></td>
+      </tr>`}).join('')}
+    </table></div>
+  </div>`;
+}
+
+/* ── REPORTS ── */
+function reportsView() {
+  const rpts = [
+    {n:'Dubai Clinical Services Capacity Plan 2026–2040',d:'Final endorsed report: strategic context, methodology, findings, recommendations',fmt:'PDF · Word · PPT',s:'em',scope:'All Districts'},
+    {n:'District Planning Briefs — 15 Zones',d:'Individual planning brief per district with classification, metrics, costed interventions',fmt:'PDF',s:'ok',scope:'15 Districts'},
+    {n:'Gap Analysis Export — 2026 Baseline',d:'Supply / demand / gap table by district, resource category, and specialty',fmt:'Excel',s:'ok',scope:'All Districts'},
+    {n:'Demand Forecast Workbook',d:'Three-scenario demand model (low/base/high) by district and specialty to 2040',fmt:'Excel',s:'em',scope:'All Districts'},
+    {n:'Workforce Assessment Report',d:'FTE supply/demand by profession, Emiratization gap tracking, allied health breakdown',fmt:'PDF · Excel',s:'em',scope:'Dubai-wide'},
+    {n:'Benchmarking Analysis',d:'Dubai vs WHO, Singapore, KSA, OECD — planning ratios and strategic implications',fmt:'PDF · PPT',s:'ok',scope:'Comparative'},
+    {n:'Investor Opportunity Summary',d:'Gap-to-investment mapping with indicative capital, timeline, and fast-track status',fmt:'PDF · Excel',s:'ok',scope:'Gap Zones'},
+    {n:'Supply Capture Database Export',d:'Full facility inventory with Sheryan validation status, bed types, workforce fields',fmt:'Excel',s:'ok',scope:'847 Facilities'},
+  ];
+  return `<div class="mv">
+    <div class="mv-hd"><div class="mv-title">Reporting Engine</div><div class="mv-sub">RFP Module 8 · PDF, Excel, and PowerPoint export · Role-based access control · Audit log retained 5 years</div></div>
+    <div class="mv-acts">
+      <button class="act-btn pri" onclick="showToast('Generating all available reports…')">Generate All Available</button>
+      <button class="act-btn" onclick="showToast('Downloading report log as Excel…')">Export Log</button>
+    </div>
+    <div class="mv-sec">Report Templates — ${rpts.length} reports</div>
+    <div class="mv-tbl-wrap"><table class="mv-tbl">
+      <tr><th>Report</th><th>Description</th><th>Format</th><th>Scope</th><th>Status</th><th>Actions</th></tr>
+      ${rpts.map(r=>`<tr>
+        <td style="font-weight:600;color:var(--text);max-width:190px">${r.n}</td>
+        <td style="color:var(--muted);font-size:11px;max-width:200px">${r.d}</td>
+        <td style="font-size:11px;white-space:nowrap;color:var(--mid)">${r.fmt}</td>
+        <td style="font-size:11px;color:var(--muted)">${r.scope}</td>
+        <td><span class="bdg ${r.s}">${r.s==='ok'?'Available':'Pending'}</span></td>
+        <td style="white-space:nowrap">
+          <button class="act-btn" style="font-size:10px;padding:3px 9px;margin-right:4px" onclick="showToast('Generating report…')">Generate</button>
+          ${r.s==='ok'?`<button class="act-btn" style="font-size:10px;padding:3px 9px" onclick="showToast('Downloading…')">Download</button>`:''}
+        </td>
+      </tr>`).join('')}
+    </table></div>
+  </div>`;
+}
+
+window.addEventListener('load', () => {
+  initMap();
+  buildSubmit();
+  renderSidebar();
+  setTimeout(() => pickDistrict('intcity'), 600);
+});
+</script>
+</body>
+</html>
